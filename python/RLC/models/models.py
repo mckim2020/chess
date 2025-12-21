@@ -121,6 +121,119 @@ class MuZeroNet(nn.Module):
         return policy_logits, value
 
 
+# Deep MuZero Network
+class DeepMuZeroNet(nn.Module):
+    """
+    Deeper MuZero Network with improved architecture:
+    h: Representation (Obs -> Hidden State)
+    g: Dynamics (State + Action -> Next State, Reward)
+    f: Prediction (State -> Policy, Value)
+    """
+    def __init__(self, state_dim=STATE_DIM, action_space=ACTION_SPACE, hidden_dim=512):
+        super().__init__()
+        self.state_dim = state_dim
+        self.action_space = action_space
+        self.hidden_dim = hidden_dim
+        
+        # h: Representation Function - Deeper CNN
+        self.repr_fn = nn.Sequential(
+            # First conv block
+            nn.Conv2d(12, 64, 3, padding=1),
+            nn.BatchNorm2d(64),
+            nn.ReLU(),
+            
+            # Second conv block
+            nn.Conv2d(64, 128, 3, padding=1),
+            nn.BatchNorm2d(128),
+            nn.ReLU(),
+            
+            # Third conv block
+            nn.Conv2d(128, 256, 3, padding=1),
+            nn.BatchNorm2d(256),
+            nn.ReLU(),
+            
+            # Flatten and FC layers
+            nn.Flatten(),
+            nn.Linear(256 * 8 * 8, hidden_dim),
+            nn.ReLU(),
+            nn.Dropout(0.2),
+            nn.Linear(hidden_dim, state_dim),
+            nn.ReLU()
+        )
+        
+        # g: Dynamics Function - Deeper MLP
+        self.action_embed = nn.Embedding(action_space, 64)
+        
+        self.dyn_state = nn.Sequential(
+            nn.Linear(state_dim + 64, hidden_dim),
+            nn.ReLU(),
+            nn.Dropout(0.2),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Dropout(0.2),
+            nn.Linear(hidden_dim, state_dim),
+            nn.ReLU()
+        )
+        
+        self.dyn_reward = nn.Sequential(
+            nn.Linear(state_dim + 64, hidden_dim // 2),
+            nn.ReLU(),
+            nn.Dropout(0.2),
+            nn.Linear(hidden_dim // 2, hidden_dim // 4),
+            nn.ReLU(),
+            nn.Linear(hidden_dim // 4, 1),
+            nn.Tanh()
+        )
+        
+        # f: Prediction Function - Deeper heads
+        self.pred_policy = nn.Sequential(
+            nn.Linear(state_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Dropout(0.2),
+            nn.Linear(hidden_dim, hidden_dim // 2),
+            nn.ReLU(),
+            nn.Linear(hidden_dim // 2, action_space)
+        )
+        
+        self.pred_value = nn.Sequential(
+            nn.Linear(state_dim, hidden_dim // 2),
+            nn.ReLU(),
+            nn.Dropout(0.2),
+            nn.Linear(hidden_dim // 2, hidden_dim // 4),
+            nn.ReLU(),
+            nn.Linear(hidden_dim // 4, 1),
+            nn.Tanh()
+        )
+
+    def h(self, obs):
+        """Representation: observation -> hidden state"""
+        return self.repr_fn(obs)
+
+    def g(self, state, action):
+        """
+        Dynamics: (state, action) -> (next_state, reward)
+        Handles action input of any shape from search
+        """
+        # Flatten action to 1D to handle [[action]], [action], etc.
+        action = action.flatten().long()
+        
+        # Embed action
+        action_emb = self.action_embed(action)  # Now [batch_size, 64]
+        
+        # Concatenate state and action embedding
+        combined = torch.cat([state, action_emb], dim=1)
+        
+        next_state = self.dyn_state(combined)
+        reward = self.dyn_reward(combined)
+        return next_state, reward
+
+    def f(self, state):
+        """Prediction: state -> (policy, value)"""
+        policy_logits = self.pred_policy(state)
+        value = self.pred_value(state)
+        return policy_logits, value
+
+
 # Residual MuZero Network
 class ResidualBlock(nn.Module):
     def __init__(self, channels):

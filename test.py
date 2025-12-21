@@ -31,8 +31,10 @@ def set_args():
     parser.add_argument('--noise', action='store_true', help="Add Dirichlet noise to root node priors")
     parser.add_argument('--noise_alpha', type=float, default=0.3, help='Dirichlet noise alpha parameter (concentration)')
     parser.add_argument('--noise_epsilon', type=float, default=0.25, help='Dirichlet noise epsilon parameter (mixing)')
+    parser.add_argument('--save_every', type=int, default=int(1e4), help='Save model every n steps')
     parser.add_argument('--verbose', action='store_true', help="verbose output")
     args = parser.parse_args()
+    args.device = 'cuda' if torch.cuda.is_available() else 'cpu'
     return args
 
 
@@ -52,8 +54,10 @@ def main():
               'noise': False, # Not using noise during play
               'noise_alpha': args.noise_alpha,
               'noise_epsilon': args.noise_epsilon,
+              'device': args.device,
               'seed': args.seed,
-              'verbose': args.verbose}
+              'verbose': args.verbose,
+              'save_every': args.save_every}
     
     grid = Grid(config=config)
     search = SearchChess(config=config, grid=grid)
