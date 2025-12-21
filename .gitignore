@@ -1,3 +1,23 @@
+# Python.gitignore
+*.pt
+*.png
+*.jpg
+*.json
+*.log
+*.out
+*.csv
+*.npy
+*.npz
+*.pth
+__pycache__
+*.err
+*.aux
+*.bcf
+*.pdf
+*.xml
+*.gz
+*.DS_Store
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
