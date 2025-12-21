@@ -50,7 +50,7 @@ def main():
               'c_puct': args.c_puct,
               'batch_size': args.batch_size,
               'learning_rate': args.learning_rate,
-              'model': DeepMuZeroNet(), #ResMuZeroNet(), #MuZeroAttentionNet(),
+              'model': MuZeroNet(), #DeepMuZeroNet(), #ResMuZeroNet(), #MuZeroAttentionNet(),
               'noise': args.noise,
               'noise_alpha': args.noise_alpha,
               'noise_epsilon': args.noise_epsilon,
@@ -78,7 +78,10 @@ def main():
 
     sim.set_random_seed()
     sim.set_device()
-    sim.train.train_muzero(model_path=model_path)
+    # sim.train.train_muzero(model_path=model_path)
+    # sim.train.train_with_teacher(stockfish_path='./stockfish/stockfish_17', model_path=model_path)
+    # sim.train.train_hybrid_co_play(stockfish_path='./stockfish/stockfish_17_mac', model_path=model_path)
+    sim.train.train_hybrid_co_play(stockfish_path='./stockfish/stockfish_17_linux', model_path=model_path)
 
     return 0
 
