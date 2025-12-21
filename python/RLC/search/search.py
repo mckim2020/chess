@@ -47,84 +47,84 @@ class SearchChess():
 
 
     def run_latent_mcts(self, initial_state, board):
-            self.config['model'].eval()
+        self.config['model'].eval()
+        
+        # 1. Initialize Root with Representation h
+        # Get initial policy and value from the Prediction function f
+        with torch.no_grad():
+            policy_logits, value = self.config['model'].f(initial_state)
+            probs = torch.softmax(policy_logits, dim=1).flatten()
+
+        root = MCTSNode(prior=1.0, hidden_state=initial_state)
+        
+        # Expand root with legal moves only
+        for move in board.legal_moves:
+            action_idx = self.grid.encode_action(move)
+            root.children[action_idx] = MCTSNode(prior=probs[action_idx].item(), hidden_state=None)
+
+        # Optionally add Dirichlet noise for exploration
+        if self.config['noise']:
+            self.add_dirichlet_noise(root, board)
+
+        # 2. Run Simulations
+        for _ in range(self.config['n_simulations']):
+            node = root
+            search_path = [node]
+
+            # --- SELECT ---
+            # Traverse until we find a node that hasn't been expanded
+            while node.children and all(child.hidden_state is not None for child in node.children.values()):
+                action, node = node.select_child(self.config['c_puct'])
+                search_path.append(node)
+
+            # --- EXPAND & EVALUATE ---
+            # Pick a child to expand
+            parent = search_path[-2] if len(search_path) > 1 else root
+            # We need an action that hasn't been "imagined" yet
+            unexpanded_actions = [a for a, c in parent.children.items() if c.hidden_state is None]
             
-            # 1. Initialize Root with Representation h
-            # Get initial policy and value from the Prediction function f
-            with torch.no_grad():
-                policy_logits, value = self.config['model'].f(initial_state)
-                probs = torch.softmax(policy_logits, dim=1).flatten()
-
-            root = MCTSNode(prior=1.0, hidden_state=initial_state)
-            
-            # Expand root with legal moves only
-            for move in board.legal_moves:
-                action_idx = self.grid.encode_action(move)
-                root.children[action_idx] = MCTSNode(prior=probs[action_idx].item(), hidden_state=None)
-
-            # Optionally add Dirichlet noise for exploration
-            if self.config['noise']:
-                self.add_dirichlet_noise(root, board)
-
-            # 2. Run Simulations
-            for _ in range(self.config['n_simulations']):
-                node = root
-                search_path = [node]
-
-                # --- SELECT ---
-                # Traverse until we find a node that hasn't been expanded
-                while node.children and all(child.hidden_state is not None for child in node.children.values()):
-                    action, node = node.select_child(self.config['c_puct'])
-                    search_path.append(node)
-
-                # --- EXPAND & EVALUATE ---
-                # Pick a child to expand
-                parent = search_path[-2] if len(search_path) > 1 else root
-                # We need an action that hasn't been "imagined" yet
-                unexpanded_actions = [a for a, c in parent.children.items() if c.hidden_state is None]
+            if unexpanded_actions:
+                action = random.choice(unexpanded_actions)
+                child = parent.children[action]
                 
-                if unexpanded_actions:
-                    action = random.choice(unexpanded_actions)
-                    child = parent.children[action]
+                with torch.no_grad():
+                    # Use Dynamics g to get next latent state and reward
+                    next_state, reward = self.config['model'].g(parent.hidden_state, torch.tensor([[action]]))
+                    # Use Prediction f to evaluate that state
+                    policy_logits, value_tensor = self.config['model'].f(next_state)
                     
-                    with torch.no_grad():
-                        # Use Dynamics g to get next latent state and reward
-                        next_state, reward = self.config['model'].g(parent.hidden_state, torch.tensor([[action]]))
-                        # Use Prediction f to evaluate that state
-                        policy_logits, value_tensor = self.config['model'].f(next_state)
-                        
-                        child.hidden_state = next_state
-                        child.reward = reward.item()
-                        
-                        # Evaluation for backprop
-                        leaf_value = value_tensor.item()
-                        
-                        # Set priors for child's potential moves (if we were to go deeper)
-                        # For simplicity in this version, we don't pre-calculate legal moves here
-                        # to save computation, but real MuZero does.
-                else:
-                    leaf_value = node.value
+                    child.hidden_state = next_state
+                    child.reward = reward.item()
+                    
+                    # Evaluation for backprop
+                    leaf_value = value_tensor.item()
+                    
+                    # Set priors for child's potential moves (if we were to go deeper)
+                    # For simplicity in this version, we don't pre-calculate legal moves here
+                    # to save computation, but real MuZero does.
+            else:
+                leaf_value = node.value
 
-                # --- BACKPROPAGATE ---
-                # Update values from leaf to root
-                for node in reversed(search_path):
-                    node.value_sum += leaf_value
-                    node.visit_count += 1
-                    # In MuZero, we also factor in the intermediate rewards
-                    leaf_value = node.reward + 0.99 * leaf_value 
+            # --- BACKPROPAGATE ---
+            # Update values from leaf to root
+            for node in reversed(search_path):
+                node.value_sum += leaf_value
+                node.visit_count += 1
+                # In MuZero, we also factor in the intermediate rewards
+                leaf_value = node.reward + 0.99 * leaf_value 
 
-            # 3. Final Move Selection
-            # Pick action with the highest visit count (most robust)
-            return self.select_final_move(root, board, temperature=1.0 if self.config['noise'] else 0.1)
+        # 3. Final Move Selection
+        # Pick action with the highest visit count (most robust)
+        return self.select_final_move(root, board, temperature=1.0 if self.config['noise'] else 0.1)
 
-            # best_action_idx = max(root.children.items(), key=lambda x: x[1].visit_count)[0]
-            
-            # # Convert index back to chess.Move
-            # for move in board.legal_moves:
-            #     if self.grid.encode_action(move) == best_action_idx:
-            #         return move
-            
-            # return random.choice(list(board.legal_moves))
+        # best_action_idx = max(root.children.items(), key=lambda x: x[1].visit_count)[0]
+        
+        # # Convert index back to chess.Move
+        # for move in board.legal_moves:
+        #     if self.grid.encode_action(move) == best_action_idx:
+        #         return move
+        
+        # return random.choice(list(board.legal_moves))
 
 
     # def run_latent_mcts(self, model, state, board, simulations=10):

@@ -13,7 +13,7 @@ import math
 
 sys.path.extend([os.path.abspath('./python')])
 from RLC import Grid, SearchChess, TrainChess, SimulateChess
-from RLC.models.models import MuZeroNet
+from RLC.models.models import MuZeroNet, ResMuZeroNet, MuZeroAttentionNet
 
 
 def set_args():
@@ -46,7 +46,7 @@ def main():
               'c_puct': args.c_puct,
               'batch_size': args.batch_size,
               'learning_rate': args.learning_rate,
-              'model': MuZeroNet(),
+              'model': MuZeroAttentionNet(), #ResMuZeroNet(), #MuZeroNet(),
               'noise': args.noise,
               'noise_alpha': args.noise_alpha,
               'noise_epsilon': args.noise_epsilon,
