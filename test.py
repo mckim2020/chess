@@ -23,6 +23,7 @@ def set_args():
     parser.add_argument('--action_space', type=int, default=4096, help='Dimension of states')
     parser.add_argument('--k_steps', type=int, default=5, help='Number of roll steps')
     parser.add_argument('--n_simulations', type=int, default=800, help='Number of MCTS simulations')
+    parser.add_argument('--max_game_length', type=int, default=1000, help='Maximum length of a game')
     parser.add_argument('--c_puct', type=float, default=1.5, help='PUCT exploration constant')
     parser.add_argument('--batch_size', type=int, default=8, help='Training batch size')
     parser.add_argument('--learning_rate', type=float, default=1e-3, help='Learning rate')
@@ -43,6 +44,7 @@ def main():
               'action_space': args.action_space,
               'k_steps': args.k_steps,
               'n_simulations': args.n_simulations,
+              'max_game_length': args.max_game_length,
               'c_puct': args.c_puct,
               'batch_size': args.batch_size,
               'learning_rate': args.learning_rate,

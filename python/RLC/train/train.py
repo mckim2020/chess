@@ -30,7 +30,7 @@ class TrainChess():
             game_history = [] # Stores (obs, action, reward)
             
             # --- SELF-PLAY PHASE ---
-            while not board.is_game_over() and len(game_history) < 50:
+            while not board.is_game_over() and len(game_history) < self.config['max_game_length']:
                 obs = self.grid.board_to_tensor(board)
                 state = self.config['model'].h(obs)
                 
