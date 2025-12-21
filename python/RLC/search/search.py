@@ -89,7 +89,7 @@ class SearchChess():
                 
                 with torch.no_grad():
                     # Use Dynamics g to get next latent state and reward
-                    next_state, reward = self.config['model'].g(parent.hidden_state, torch.tensor([[action]]))
+                    next_state, reward = self.config['model'].g(parent.hidden_state, torch.tensor([[action]], device=self.config['device']))
                     # Use Prediction f to evaluate that state
                     policy_logits, value_tensor = self.config['model'].f(next_state)
                     
