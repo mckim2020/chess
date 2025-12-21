@@ -8,7 +8,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from collections import deque
-from stockfish import Stockfish
 
 
 class TrainChess():
@@ -20,7 +19,7 @@ class TrainChess():
 
     def train_muzero(self, model_path='muzero_chess_model.pth'):
         if os.path.exists(model_path):
-            self.config['model'].load_state_dict(torch.load(model_path))
+            self.config['model'].load_state_dict(torch.load(model_path, map_location=self.config['device']))
             self.config['model'].to(self.config['device'])
             print(f"Loaded model from {model_path}")
             return
@@ -114,6 +113,7 @@ class TrainChess():
 
 
     def train_with_teacher(self, stockfish_path, model_path='distilled_model.pth'):
+        from stockfish import Stockfish
         # 1. Initialize the Teacher
         # depth 12-15 is plenty for a teacher; higher is slower.
         teacher = Stockfish(path=stockfish_path, parameters={"Threads": 12, "UCI_Elo": 3000})
@@ -220,6 +220,7 @@ class TrainChess():
 
 
     def train_hybrid_co_play(self, stockfish_path, model_path='hybrid_model.pth'):
+        from stockfish import Stockfish
         # 1. Setup Teacher
         # Using a moderate depth to keep the training loop fast
         teacher = Stockfish(path=stockfish_path, parameters={"Threads": 12, "UCI_Elo": 100})
