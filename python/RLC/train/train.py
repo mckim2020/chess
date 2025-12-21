@@ -17,6 +17,7 @@ class TrainChess():
     def train_muzero(self, model_path='muzero_chess_model.pth'):
         if os.path.exists(model_path):
             self.config['model'].load_state_dict(torch.load(model_path))
+            self.config['model'].to(self.config['device'])
             print(f"Loaded model from {model_path}")
             return
 
@@ -71,14 +72,14 @@ class TrainChess():
                         target_reward = history[start_idx + k]['reward']
                         
                         # Predict Dynamics (imagined next state and reward)
-                        current_state, pred_reward = self.config['model'].g(current_state, torch.tensor([[target_action]]))
+                        current_state, pred_reward = self.config['model'].g(current_state, torch.tensor([[target_action]], device=self.config['device']))
                         
                         # Predict Value/Policy from imagined state
                         pred_policy, pred_value = self.config['model'].f(current_state)
                         
                         # Loss = Reward Loss + Value Loss (Target is the game outcome)
-                        loss_r = nn.MSELoss()(pred_reward, torch.tensor([[float(target_reward)]]))
-                        loss_v = nn.MSELoss()(pred_value, torch.tensor([[float(final_reward)]]))
+                        loss_r = nn.MSELoss()(pred_reward, torch.tensor([[float(target_reward)]], device=self.config['device']))
+                        loss_v = nn.MSELoss()(pred_value, torch.tensor([[float(final_reward)]], device=self.config['device']))
                         
                         total_loss += loss_r + loss_v
                 

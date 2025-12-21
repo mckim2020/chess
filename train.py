@@ -32,6 +32,7 @@ def set_args():
     parser.add_argument('--noise_epsilon', type=float, default=0.25, help='Dirichlet noise epsilon parameter (mixing)')
     parser.add_argument('--verbose', action='store_true', help="verbose output")
     args = parser.parse_args()
+    args.device = 'cuda' if torch.cuda.is_available() else 'cpu'
     return args
 
 
@@ -46,10 +47,11 @@ def main():
               'c_puct': args.c_puct,
               'batch_size': args.batch_size,
               'learning_rate': args.learning_rate,
-              'model': MuZeroAttentionNet(), #ResMuZeroNet(), #MuZeroNet(),
+              'model': MuZeroNet(), #ResMuZeroNet(), #MuZeroAttentionNet(),
               'noise': args.noise,
               'noise_alpha': args.noise_alpha,
               'noise_epsilon': args.noise_epsilon,
+              'device': args.device,
               'seed': args.seed,
               'verbose': args.verbose}
     
@@ -57,8 +59,6 @@ def main():
     search = SearchChess(config=config, grid=grid)
     train = TrainChess(config=config, grid=grid, search=search)
     sim = SimulateChess(config=config, grid=grid, search=search, train=train)
-
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
     model_path = (f'muzero_chess_model_'
                   f'n_episodes_{args.n_episodes}_'
@@ -72,7 +72,8 @@ def main():
                   f'noise_epsilon_{args.noise_epsilon}_'
                   f'.pth')
 
-    sim.set_random_seed(device=device)
+    sim.set_random_seed()
+    sim.set_device()
     sim.train.train_muzero(model_path=model_path)
 
     return 0

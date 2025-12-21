@@ -11,8 +11,12 @@ class SimulateChess():
         self.play = play
 
 
-    def set_random_seed(self, device='cpu'):
+    def set_random_seed(self):
         np.random.seed(self.config['seed'])
         torch.manual_seed(self.config['seed'])
-        torch.Generator(device).manual_seed(self.config['seed'])
+        torch.Generator(self.config['device']).manual_seed(self.config['seed'])
         # torch.use_deterministic_algorithms(True)
+
+
+    def set_device(self):
+        self.config['model'].to(self.config['device'])
