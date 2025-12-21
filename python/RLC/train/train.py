@@ -3,6 +3,7 @@ import chess
 import random
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import torch.optim as optim
 from collections import deque
 
@@ -34,12 +35,22 @@ class TrainChess():
                 state = self.config['model'].h(obs)
                 
                 # Plan move using Latent MCTS
-                move = self.search.run_latent_mcts(state, board)
-                if move is None: break
-                
+                # 1. Get the move AND the search probabilities (pi) from MCTS
+                # You'll need to modify your run_latent_mcts to return both
+                # move = self.search.run_latent_mcts(state, board)
+                # if move is None: break
+                # action_idx = self.grid.encode_action(move)
+                # game_history.append({'obs': obs, 'action': action_idx, 'reward': 0})
+                # board.push(move)
+
+                move, search_pi = self.search.run_latent_mcts(state, board, return_pi=True)
                 action_idx = self.grid.encode_action(move)
-                game_history.append({'obs': obs, 'action': action_idx, 'reward': 0})
-                
+                game_history.append({
+                    'obs': obs, 
+                    'action': action_idx, 
+                    'target_pi': search_pi, # This is a vector of size ACTION_SPACE
+                    'reward': 0
+                })
                 board.push(move)
             
             # Assign final game result as reward to the last state
@@ -70,6 +81,7 @@ class TrainChess():
                     for k in range(self.config['k_steps']):
                         target_action = history[start_idx + k]['action']
                         target_reward = history[start_idx + k]['reward']
+                        target_pi = torch.tensor(history[start_idx + k]['target_pi'], device=self.config['device'])
                         
                         # Predict Dynamics (imagined next state and reward)
                         current_state, pred_reward = self.config['model'].g(current_state, torch.tensor([[target_action]], device=self.config['device']))
@@ -78,15 +90,20 @@ class TrainChess():
                         pred_policy, pred_value = self.config['model'].f(current_state)
                         
                         # Loss = Reward Loss + Value Loss (Target is the game outcome)
+                        loss_p = F.cross_entropy(pred_policy, target_pi.unsqueeze(0))
                         loss_r = nn.MSELoss()(pred_reward, torch.tensor([[float(target_reward)]], device=self.config['device']))
                         loss_v = nn.MSELoss()(pred_value, torch.tensor([[float(final_reward)]], device=self.config['device']))
                         
-                        total_loss += loss_r + loss_v
+                        total_loss += loss_p + loss_v + loss_r
                 
                 if total_loss > 0:
                     total_loss.backward()
                     optimizer.step()
                     print(f"Episode {ep+1} | Loss: {total_loss.item():.4e} | Result: {result}")
+        
+            if (ep + 1) % self.config['save_every'] == 0:
+                torch.save(self.config['model'].state_dict(), f'./models/model_ep_{ep+1}.pth')
+                print(f"Model saved at episode {ep+1} as {f'./models/model_ep_{ep+1}.pth'}")
 
         print("Training completed.")
         torch.save(self.config['model'].state_dict(), model_path)

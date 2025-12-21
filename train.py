@@ -20,7 +20,7 @@ def set_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--n_episodes', type=int, default=100, help='Number of episodes to train')
     parser.add_argument('--state_dim', type=int, default=64, help='Dimension of states')
-    parser.add_argument('--action_space', type=int, default=64, help='Dimension of states')
+    parser.add_argument('--action_space', type=int, default=4096, help='Dimension of states')
     parser.add_argument('--k_steps', type=int, default=5, help='Number of roll steps')
     parser.add_argument('--n_simulations', type=int, default=800, help='Number of MCTS simulations')
     parser.add_argument('--c_puct', type=float, default=1.5, help='PUCT exploration constant')
@@ -30,6 +30,7 @@ def set_args():
     parser.add_argument('--noise', action='store_true', help="Add Dirichlet noise to root node priors")
     parser.add_argument('--noise_alpha', type=float, default=0.3, help='Dirichlet noise alpha parameter (concentration)')
     parser.add_argument('--noise_epsilon', type=float, default=0.25, help='Dirichlet noise epsilon parameter (mixing)')
+    parser.add_argument('--save_every', type=int, default=int(1e4), help='Save model every n steps')
     parser.add_argument('--verbose', action='store_true', help="verbose output")
     args = parser.parse_args()
     args.device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -53,7 +54,8 @@ def main():
               'noise_epsilon': args.noise_epsilon,
               'device': args.device,
               'seed': args.seed,
-              'verbose': args.verbose}
+              'verbose': args.verbose,
+              'save_every': args.save_every}
     
     grid = Grid(config=config)
     search = SearchChess(config=config, grid=grid)

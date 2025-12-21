@@ -20,7 +20,7 @@ def set_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--n_episodes', type=int, default=100, help='Number of episodes to train')
     parser.add_argument('--state_dim', type=int, default=64, help='Dimension of states')
-    parser.add_argument('--action_space', type=int, default=64, help='Dimension of states')
+    parser.add_argument('--action_space', type=int, default=4096, help='Dimension of states')
     parser.add_argument('--k_steps', type=int, default=5, help='Number of roll steps')
     parser.add_argument('--n_simulations', type=int, default=800, help='Number of MCTS simulations')
     parser.add_argument('--c_puct', type=float, default=1.5, help='PUCT exploration constant')
@@ -47,7 +47,7 @@ def main():
               'batch_size': args.batch_size,
               'learning_rate': args.learning_rate,
               'model': MuZeroNet(),
-              'noise': args.noise,
+              'noise': False, # Not using noise during play
               'noise_alpha': args.noise_alpha,
               'noise_epsilon': args.noise_epsilon,
               'seed': args.seed,
@@ -68,12 +68,13 @@ def main():
                   f'c_puct_{args.c_puct}_'
                   f'batch_size_{args.batch_size}_'
                   f'learning_rate_{args.learning_rate}_'
-                  f'noise_{args.noise}_'
+                  f'noise_{True}_' # Used noise during training
                   f'noise_alpha_{args.noise_alpha}_'
                   f'noise_epsilon_{args.noise_epsilon}_'
                   f'.pth')
 
-    sim.set_random_seed(device=device)
+    sim.set_random_seed()
+    sim.set_device()
     sim.train.train_muzero(model_path=model_path)
 
     sim.play.play()

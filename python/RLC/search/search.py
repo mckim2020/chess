@@ -46,13 +46,21 @@ class SearchChess():
                 return move
 
 
-    def run_latent_mcts(self, initial_state, board):
+    def run_latent_mcts(self, initial_state, board, return_pi=False):
         self.config['model'].eval()
         
         # 1. Initialize Root with Representation h
         # Get initial policy and value from the Prediction function f
         with torch.no_grad():
             policy_logits, value = self.config['model'].f(initial_state)
+
+            # --- MASKING ILLEGAL MOVES ---
+            # We only care about the priors for moves that are legal in the real game
+            mask = torch.full(policy_logits.shape, -float("inf"), device=self.config['device'])
+            legal_indices = [self.grid.encode_action(m) for m in board.legal_moves]
+            for idx in legal_indices:
+                mask[0, idx] = policy_logits[0, idx]
+
             probs = torch.softmax(policy_logits, dim=1).flatten()
 
         root = MCTSNode(prior=1.0, hidden_state=initial_state)
@@ -113,9 +121,22 @@ class SearchChess():
                 # In MuZero, we also factor in the intermediate rewards
                 leaf_value = node.reward + 0.99 * leaf_value 
 
-        # 3. Final Move Selection
-        # Pick action with the highest visit count (most robust)
-        return self.select_final_move(root, board, temperature=1.0 if self.config['noise'] else 0.1)
+        # 3. Calculate Target Policy (pi)
+        # pi(a|s) = N(s,a)^(1/τ) / Σ N(s,b)^(1/τ)
+        # During training, τ=1. During competitive play, τ is small.
+        total_visits = sum(child.visit_count for child in root.children.values())
+        pi = np.zeros(self.config['action_space']) # Ensure this matches your model output dim
+        for action_idx, child in root.children.items():
+            pi[action_idx] = child.visit_count / total_visits
+
+        # 4. Final Move Selection
+        # We use a temperature of 1.0 for training to ensure diverse experience
+        # return self.select_final_move(root, board, temperature=1.0 if self.config['noise'] else 0.1)
+        move = self.select_final_move(root, board, temperature=1.0 if self.config['noise'] else 0.1)
+
+        if return_pi:
+            return move, pi
+        return move
 
         # best_action_idx = max(root.children.items(), key=lambda x: x[1].visit_count)[0]
         
