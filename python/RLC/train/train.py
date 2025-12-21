@@ -116,8 +116,8 @@ class TrainChess():
     def train_with_teacher(self, stockfish_path, model_path='distilled_model.pth'):
         # 1. Initialize the Teacher
         # depth 12-15 is plenty for a teacher; higher is slower.
-        teacher = Stockfish(path=stockfish_path, parameters={"Threads": 2, "Minimum Thinking Time": 30, "UCI_Elo": 3000})
-        teacher.set_depth(15)
+        teacher = Stockfish(path=stockfish_path, parameters={"Threads": 12, "UCI_Elo": 3000})
+        teacher.set_depth(1)
         
         optimizer = optim.Adam(self.config['model'].parameters(), lr=self.config['learning_rate'])
         
@@ -222,8 +222,8 @@ class TrainChess():
     def train_hybrid_co_play(self, stockfish_path, model_path='hybrid_model.pth'):
         # 1. Setup Teacher
         # Using a moderate depth to keep the training loop fast
-        teacher = Stockfish(path=stockfish_path, parameters={"Threads": 4, "Minimum Thinking Time": 30, "UCI_Elo": 3000})
-        teacher.set_depth(15)
+        teacher = Stockfish(path=stockfish_path, parameters={"Threads": 12, "UCI_Elo": 100})
+        teacher.set_depth(1)
         
         optimizer = optim.Adam(self.config['model'].parameters(), lr=self.config['learning_rate'], weight_decay=1e-4)
         replay_buffer = deque(maxlen=500)
@@ -325,7 +325,8 @@ class TrainChess():
                         loss_p = F.cross_entropy(pred_p, t_pi.unsqueeze(0))
                         loss_v = F.mse_loss(pred_v, t_v)
                         
-                        total_loss += (loss_p + loss_v)
+                        # total_loss += (loss_p + loss_v)
+                        total_loss += loss_v
 
                 if total_loss > 0:
                     total_loss.backward()

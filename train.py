@@ -78,10 +78,10 @@ def main():
 
     sim.set_random_seed()
     sim.set_device()
-    # sim.train.train_muzero(model_path=model_path)
-    # sim.train.train_with_teacher(stockfish_path='./stockfish/stockfish_17', model_path=model_path)
+    sim.train.train_muzero(model_path=model_path)
+    # sim.train.train_with_teacher(stockfish_path='./stockfish/stockfish_17_mac', model_path=model_path)
     # sim.train.train_hybrid_co_play(stockfish_path='./stockfish/stockfish_17_mac', model_path=model_path)
-    sim.train.train_hybrid_co_play(stockfish_path='./stockfish/stockfish_17_linux', model_path=model_path)
+    # sim.train.train_hybrid_co_play(stockfish_path='./stockfish/stockfish_17_linux', model_path=model_path)
 
     return 0
 
