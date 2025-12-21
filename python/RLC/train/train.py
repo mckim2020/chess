@@ -222,7 +222,7 @@ class TrainChess():
     def train_hybrid_co_play(self, stockfish_path, model_path='hybrid_model.pth'):
         # 1. Setup Teacher
         # Using a moderate depth to keep the training loop fast
-        teacher = Stockfish(path=stockfish_path, parameters={"Threads": 4, "Minimum Thinking Time": 30})
+        teacher = Stockfish(path=stockfish_path, parameters={"Threads": 4, "Minimum Thinking Time": 30, "UCI_Elo": 3000})
         teacher.set_depth(15)
         
         optimizer = optim.Adam(self.config['model'].parameters(), lr=self.config['learning_rate'], weight_decay=1e-4)
