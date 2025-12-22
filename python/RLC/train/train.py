@@ -326,8 +326,8 @@ class TrainChess():
                         loss_p = F.cross_entropy(pred_p, t_pi.unsqueeze(0))
                         loss_v = F.mse_loss(pred_v, t_v)
                         
-                        # total_loss += (loss_p + loss_v)
-                        total_loss += loss_v
+                        total_loss += (loss_p + loss_v)
+                        # total_loss += loss_v
 
                 if total_loss > 0:
                     total_loss.backward()
@@ -342,7 +342,110 @@ class TrainChess():
                         ai_outcome = "AI LOST"
 
                     print(f"Ep {ep+1:3d} | AI: {'White' if ai_is_white else 'Black':5s} | Result: {ai_outcome:7s} ({res}) | Length: {len(history)} | Loss: {total_loss.item():.4e}")
+                    
+                    if ai_outcome == "DRAW":
+                        print(board)
 
         # Save the final hybrid-trained model
         torch.save(self.config['model'].state_dict(), model_path)
         print(f"Hybrid training complete. Model saved to {model_path}")
+
+
+
+
+
+
+
+
+
+
+    def train_forever(self, stockfish_path, model_path='distilled_model.pth'):
+        from stockfish import Stockfish
+        # 1. Initialize the Teacher
+        # depth 12-15 is plenty for a teacher; higher is slower.
+        teacher = Stockfish(path=stockfish_path, parameters={"Threads": 12, "UCI_Elo": 3000})
+        teacher.set_depth(1)
+        
+        optimizer = optim.Adam(self.config['model'].parameters(), lr=self.config['learning_rate'])
+        
+        # Replay buffer stores high-quality teacher demonstrations
+        replay_buffer = deque(maxlen=500) 
+        
+        for ep in range(self.config['n_episodes']):
+            board = chess.Board()
+            game_history = [] 
+            
+            # --- DATA GENERATION PHASE (Teacher Lead) ---
+            while not board.is_game_over() and len(game_history) < self.config['max_game_length']:
+                teacher.set_fen_position(board.fen())
+                
+                # Get Teacher Policy (Best Move)
+                best_move_uci = teacher.get_best_move()
+                if not best_move_uci: break
+                best_move = chess.Move.from_uci(best_move_uci)
+                
+                # Get Teacher Value (Evaluation)
+                eval_dict = teacher.get_evaluation()
+                raw_value = eval_dict['value']
+                
+                # Step 1: Convert to Side-to-Move POV
+                # If it's Black's turn, a negative SF score is GOOD for Black.
+                # We want 'pos' to mean 'good for the current player'
+                stm_value = raw_value if board.turn == chess.WHITE else -raw_value
+                
+                # Step 2: Squash into 0.0 to 1.0 (Win Probability)
+                if eval_dict['type'] == 'cp':
+                    # Stockfish 16 uses this coefficient to anchor 100cp to 50% win chance
+                    teacher_val = 1 / (1 + math.exp(-0.00368208 * stm_value))
+                else:
+                    # Handle Mate scores: Mate in X is a guaranteed win (1.0) or loss (0.0)
+                    teacher_val = 1.0 if stm_value > 0 else 0.0
+
+                obs = self.grid.board_to_tensor(board)
+
+                game_history.append({
+                    'obs': obs,
+                    'target_value': teacher_val
+                })
+                
+                board.push(best_move)
+                
+            replay_buffer.append(game_history)
+
+            # --- TRAINING PHASE (Supervised Distillation) ---
+            if len(replay_buffer) >= self.config['batch_size']:
+                self.config['model'].train()
+                
+                # Sample a batch of random positions from various games
+                # We flatten the buffer to sample individual positions, not just whole games
+                all_positions = [pos for game in replay_buffer for pos in game]
+                batch = random.sample(all_positions, self.config['batch_size'])
+                
+                # Prepare Tensors
+                obs_batch = torch.cat([item['obs'] for item in batch]).to(self.config['device'])
+                target_v_batch = torch.tensor([[item['target_value']] for item in batch], dtype=torch.float, device=self.config['device'])
+                
+                # Optimization step
+                optimizer.zero_grad()
+                
+                # Forward pass: model predicts policy and value for the board
+                # (Assumes your model has a forward(obs) -> policy, value)
+                pred_v_batch = self.config['model'](obs_batch)
+                
+                # 1. Value Loss (MSE): Matches Stockfish's evaluation score
+                loss_v = F.mse_loss(pred_v_batch, target_v_batch)
+
+                total_loss = loss_v
+                total_loss.backward()
+                optimizer.step()
+
+                if (ep + 1) % 10 == 0:
+                    print(f"Batch Loss: {total_loss.item():.4f}")
+
+            # Periodic Saving
+            if (ep + 1) % self.config['save_every'] == 0:
+                torch.save(self.config['model'].state_dict(), f"./models/distilled_model_{ep+1}.pth")
+
+        print("Knowledge Distillation Complete.")
+        torch.save(self.config['model'].state_dict(), model_path)
+        print(f"Final distilled model saved as {model_path}")

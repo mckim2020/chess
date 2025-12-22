@@ -3,12 +3,13 @@ import torch
 
 
 class SimulateChess():
-    def __init__(self, config:dict, grid=None, search=None, train=None, play=None):
+    def __init__(self, config:dict, grid=None, search=None, train=None, play=None, teacher=None):
         self.config = config
         self.grid = grid
         self.search = search
         self.train = train
         self.play = play
+        self.teacher = teacher
 
 
     def set_random_seed(self):

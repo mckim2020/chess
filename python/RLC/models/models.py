@@ -397,3 +397,49 @@ class MuZeroAttentionNet(nn.Module):
         logits = self.policy_head(x_flat)
         value = torch.tanh(self.value_head(x_flat))
         return logits, value
+
+
+
+
+
+
+
+
+
+
+
+
+class ChessEvalNet(nn.Module):
+    def __init__(self):
+        super(ChessEvalNet, self).__init__()
+        
+        # Layer 1: Takes 18 channels and creates 64 feature maps
+        # kernel_size=3 means it looks at 3x3 areas (local patterns)
+        self.conv1 = nn.Conv2d(18, 64, kernel_size=3, padding=1)
+        
+        # Layer 2: Deeper features
+        self.conv2 = nn.Conv2d(64, 128, kernel_size=3, padding=1)
+        
+        # Layer 3: Final spatial features
+        self.conv3 = nn.Conv2d(128, 128, kernel_size=3, padding=1)
+        
+        # Fully Connected Layers (The "Brain" that decides the value)
+        # 128 channels * 8 * 8 squares = 8192 inputs
+        self.fc1 = nn.Linear(128 * 8 * 8, 512)
+        self.fc2 = nn.Linear(512, 1)
+
+    def forward(self, x):
+        # Apply Convolutions with ReLU activation
+        x = F.relu(self.conv1(x))
+        x = F.relu(self.conv2(x))
+        x = F.relu(self.conv3(x))
+        
+        # Flatten the 8x8 grid into a long vector
+        x = x.view(-1, 128 * 8 * 8)
+        
+        # Hidden layer
+        x = F.relu(self.fc1(x))
+        
+        # Output: Use Tanh to get a score between -1 and 1
+        # -1 = Total Loss, 0 = Draw, 1 = Total Win
+        return torch.tanh(self.fc2(x))

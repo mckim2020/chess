@@ -2,12 +2,167 @@ import numpy as np
 import torch
 import random
 import math
+import chess
 
 
 class SearchChess():
     def __init__(self, config:dict, grid=None):
         self.config = config
         self.grid = grid
+        # Standard material values for evaluation
+        self.piece_values = {
+            chess.PAWN: 100,
+            chess.KNIGHT: 320,
+            chess.BISHOP: 330,
+            chess.ROOK: 500,
+            chess.QUEEN: 900,
+            chess.KING: 20000
+        }
+
+
+    # def evaluate_board(self, board):
+        # """A simple material-based evaluation function."""
+        # if board.is_checkmate():
+        #     return -99999 if board.turn else 99999
+        
+        # score = 0
+        # for piece_type, value in self.piece_values.items():
+        #     score += len(board.pieces(piece_type, chess.WHITE)) * value
+        #     score -= len(board.pieces(piece_type, chess.BLACK)) * value
+        
+        # # Return score relative to the side to move (Negamax style)
+        # return score if board.turn == chess.WHITE else -score
+
+
+    # def evaluate_board(self, board):
+    #     if board.is_checkmate(): return -99999
+    #     if board.is_draw(): return 0
+        
+    #     tensor = self.board_to_tensor(board)
+    #     with torch.no_grad():
+    #         # Output is already relative to the side to move!
+    #         val = self.model(tensor).item() 
+            
+    #     return int(val * 1000)
+
+
+    def evaluate_board(self, board):
+        if board.is_checkmate(): return 0.0  # I am in checkmate, my win prob is 0
+        if board.can_claim_draw(): return 0.5       # Draw is 50/50
+        
+        tensor = self.grid.board_to_tensor(board)
+        # with torch.no_grad():
+            # Model outputs -1.0 (Loss) to 1.0 (Win)
+        nn_output = self.config['model'](tensor).item() 
+            
+        # Transform (-1 to 1) -> (0 to 1) to match the teacher's scale
+        win_prob = (nn_output + 1) / 2
+        return win_prob
+
+
+    def order_moves(self, board, moves):
+        """
+        Stockfish's 'Secret Sauce': Searching better moves first 
+        drastically increases pruning efficiency.
+        """
+        def score_move(move):
+            score = 0
+            # 1. Prioritize Captures (MVV-LVA: Most Valuable Victim - Least Valuable Attacker)
+            if board.is_capture(move):
+                victim = board.piece_at(move.to_square)
+                attacker = board.piece_at(move.from_square)
+                if victim and attacker:
+                    score += 10 * self.piece_values[victim.piece_type] - self.piece_values[attacker.piece_type]
+            
+            # 2. Prioritize Promotions
+            if move.promotion:
+                score += 900
+            
+            # 3. Give a small bonus for checks
+            if board.gives_check(move):
+                score += 50
+                
+            return score
+
+        return sorted(moves, key=score_move, reverse=True)
+
+
+    def quiescence_search(self, board, alpha, beta):
+        """
+        Prevents the 'Horizon Effect'. Only searches captures until 
+        the position is 'quiet' so we don't miss a hanging piece.
+        """
+        stand_pat = self.evaluate_board(board)
+        if stand_pat >= beta:
+            return beta
+        if alpha < stand_pat:
+            alpha = stand_pat
+
+        for move in self.order_moves(board, list(board.generate_legal_captures())):
+            board.push(move)
+            score = -self.quiescence_search(board, -beta, -alpha)
+            board.pop()
+
+            if score >= beta:
+                return beta
+            if score > alpha:
+                alpha = score
+        return alpha
+
+
+    def alpha_beta(self, board, depth, alpha, beta):
+        """The core Negamax Alpha-Beta search."""
+        if depth == 0:
+            return self.quiescence_search(board, alpha, beta)
+
+        if board.is_game_over():
+            return self.evaluate_board(board)
+
+        best_score = -float('inf')
+        
+        # Move Ordering is crucial for Alpha-Beta efficiency
+        ordered_moves = self.order_moves(board, list(board.legal_moves))
+
+        for move in ordered_moves:
+            board.push(move)
+            score = -self.alpha_beta(board, depth - 1, -beta, -alpha)
+            board.pop()
+
+            if score >= beta:
+                return beta # Fail-high (Pruning)
+            
+            if score > alpha:
+                alpha = score
+                
+        return alpha
+
+
+    def select_move(self, board, max_depth=4):
+        """
+        Iterative Deepening: Searches depth 1, then 2, etc. 
+        This is how engines manage time and improve move ordering.
+        """
+        best_move = None
+        
+        for depth in range(1, max_depth + 1):
+            alpha = -float('inf')
+            beta = float('inf')
+            best_score = -float('inf')
+            
+            ordered_moves = self.order_moves(board, list(board.legal_moves))
+            
+            for move in ordered_moves:
+                board.push(move)
+                score = -self.alpha_beta(board, depth - 1, -beta, -alpha)
+                board.pop()
+                
+                if score > best_score:
+                    best_score = score
+                    best_move = move
+                
+                alpha = max(alpha, score)
+                
+        return best_move
 
 
     def add_dirichlet_noise(self, node, board):

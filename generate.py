@@ -12,7 +12,7 @@ import math
 
 
 sys.path.extend([os.path.abspath('./python')])
-from RLC import Grid, SearchChess, TrainChess, SimulateChess
+from RLC import Grid, SearchChess, TrainChess, SimulateChess, StockfishTeacher
 from RLC.models.models import MuZeroNet, MuZeroAttentionNet, DeepMuZeroNet, ChessEvalNet
 
 
@@ -62,7 +62,8 @@ def main():
     grid = Grid(config=config)
     search = SearchChess(config=config, grid=grid)
     train = TrainChess(config=config, grid=grid, search=search)
-    sim = SimulateChess(config=config, grid=grid, search=search, train=train)
+    teacher = StockfishTeacher(grid=grid, config=config, path_to_exe='./stockfish/stockfish_17_mac', depth=15)
+    sim = SimulateChess(config=config, grid=grid, search=search, train=train, teacher=teacher)
 
     model_path = (f'muzero_chess_model_'
                   f'n_episodes_{args.n_episodes}_'
@@ -78,12 +79,9 @@ def main():
 
     sim.set_random_seed()
     sim.set_device()
-    # sim.train.train_muzero(model_path=model_path)
-    # sim.train.train_with_teacher(stockfish_path='./stockfish/stockfish_17_mac', model_path=model_path)
-    # sim.train.train_hybrid_co_play(stockfish_path='./stockfish/stockfish_17_mac', model_path=model_path)
-    # sim.train.train_hybrid_co_play(stockfish_path='./stockfish/stockfish_17_linux', model_path=model_path)
 
-    sim.train.train_forever(stockfish_path='./stockfish/stockfish_17_mac', model_path=model_path)
+    # sim.teacher.run_forever()
+    sim.teacher.process_pgn(pgn_path='./episodes/lichess_db_standard_rated_2013-01.pgn', output_dir='./episodes')
 
     return 0
 
