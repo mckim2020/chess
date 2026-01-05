@@ -62,7 +62,7 @@ def main():
     grid = Grid(config=config)
     search = SearchChess(config=config, grid=grid)
     train = TrainChess(config=config, grid=grid, search=search)
-    teacher = StockfishTeacher(grid=grid, config=config, path_to_exe='./stockfish/stockfish_17_mac', depth=15)
+    teacher = StockfishTeacher(grid=grid, config=config, path_to_exe='./stockfish/stockfish_17_mac', depth=1)
     sim = SimulateChess(config=config, grid=grid, search=search, train=train, teacher=teacher)
 
     model_path = (f'muzero_chess_model_'

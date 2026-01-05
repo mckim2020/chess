@@ -5,16 +5,51 @@ import chess.pgn
 import chess.engine
 import math
 import numpy as np
-from stockfish import Stockfish
 
 
 class StockfishTeacher:
     def __init__(self, config, grid, path_to_exe, depth=15):
+        from stockfish import Stockfish
         self.config = config
         self.grid = grid
         # On Mac, path might be "/usr/local/bin/stockfish" or similar
         self.engine = Stockfish(path=path_to_exe, parameters={"Threads": 12, "UCI_Elo": 3000})
         self.engine.set_depth(depth)
+
+
+    def get_static_eval(self):
+        """Sends the 'eval' command to stockfish to get the static evaluation. The current position is
+           'directly' evaluated -- i.e., no search is involved.
+
+        Returns:
+            A float representing the static eval, unless one side is in check or checkmated,
+            in which case None is returned.
+        """
+
+        # Stockfish gives the static eval from white's perspective:
+        # compare: int = (
+        #     1
+        #     if not self.engine._turn_perspective() or ("w" in self.engine.get_fen_position())
+        #     else -1
+        # )
+
+        compare = 1 if ("w" in self.engine.get_fen_position()) else -1
+
+        self.engine._put("eval")
+        while True:
+            text = self.engine._read_line()
+            if any(
+                text.startswith(x) for x in ("Final evaluation", "Total Evaluation")
+            ):
+                static_eval = text.split()[2]
+                if " none " not in text:
+                    self.engine._read_line()
+                    # Consume the remaining line (for some reason `eval` outputs an extra newline)
+                if static_eval == "none":
+                    assert "(in check)" in text
+                    return None
+                else:
+                    return float(static_eval) * compare
 
 
     def get_teacher_data(self, board, action_space_size, grid_utils):
@@ -128,7 +163,14 @@ class StockfishTeacher:
                     
                     # Get Teacher Value (Evaluation)
                     eval_dict = self.engine.get_evaluation()
+                    eval_dict = self.get_static_eval()
+                    print(eval_dict)
+
                     raw_value = eval_dict['value']
+                    print(board)
+                    print()
+                    print(raw_value)
+                    raise ValueError("Debugging Stop")
                     
                     # Step 1: Convert to Side-to-Move POV
                     # If it's Black's turn, a negative SF score is GOOD for Black.
